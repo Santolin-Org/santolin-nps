@@ -29,10 +29,20 @@ export const enviarRespostaParaCrm = createServerFn({ method: "POST" })
       return { ok: false as const, motivo: "sem-url" };
     }
 
+    const [primeiroNome, ...sobrenomes] = data.nome.split(" ");
+    const telefone = `+55${data.telefone}`;
+
+    // Além dos campos em português, enviamos as chaves padrão de contato do GHL
+    // (name, first_name, last_name, phone, email), que o CRM reconhece com mais
+    // facilidade ao mapear o webhook para o contato.
     const payload = {
-      nome_completo: data.nome,
-      telefone: `+55${data.telefone}`,
+      name: data.nome,
+      first_name: primeiroNome,
+      last_name: sobrenomes.join(" "),
+      phone: telefone,
       email: data.email,
+      nome_completo: data.nome,
+      telefone,
       nps_score: data.score,
       nps_classificacao: classificar(data.score),
       avaliacao_atendimento: data.atendimento,
