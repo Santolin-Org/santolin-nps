@@ -27,13 +27,7 @@ export const Route = createFileRoute("/")({
   component: Survey,
 });
 
-const OPCOES_ATENDIMENTO = [
-  "5. Excelente",
-  "4. Bom",
-  "3. Regular",
-  "2. Ruim",
-  "1. Muito ruim",
-];
+const OPCOES_ATENDIMENTO = ["5. Excelente", "4. Bom", "3. Regular", "2. Ruim", "1. Muito ruim"];
 const OPCOES_SERVICOS = ["Não conheço", "Conheço alguns", "Sim, conheço"];
 
 // O e-mail é a chave usada para vincular a resposta ao contato no CRM (GHL),
@@ -44,10 +38,53 @@ function emailValido(email: string) {
   return EMAIL_REGEX.test(email.trim());
 }
 
+// Nome completo: pelo menos nome e sobrenome.
+function nomeValido(nome: string) {
+  const partes = nome
+    .trim()
+    .split(/\s+/)
+    .filter((p) => p.length > 0);
+  return partes.length >= 2 && nome.trim().length <= 120;
+}
+
+function apenasDigitos(valor: string) {
+  return valor.replace(/\D/g, "");
+}
+
+// Telefone brasileiro com DDD: 10 dígitos (fixo) ou 11 dígitos (celular, começando com 9).
+function telefoneValido(telefone: string) {
+  const d = apenasDigitos(telefone);
+  if (!/^[1-9][1-9]/.test(d)) return false;
+  if (d.length === 10) return /^[1-9]{2}[2-5]/.test(d);
+  if (d.length === 11) return d[2] === "9";
+  return false;
+}
+
+// Aplica a máscara (00) 00000-0000 enquanto o cliente digita.
+function formatarTelefone(valor: string) {
+  const d = apenasDigitos(valor).slice(0, 11);
+  if (d.length === 0) return "";
+  if (d.length <= 2) return `(${d}`;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
+function inputClasses(comErro: boolean) {
+  return cn(
+    "w-full rounded-2xl border bg-background px-5 py-4 text-[15px] text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:ring-2",
+    comErro
+      ? "border-destructive focus:border-destructive focus:ring-destructive/20"
+      : "border-border focus:border-primary focus:ring-primary/20",
+  );
+}
+
 type Answers = {
   score: number | null;
   atendimento: string | null;
   servicos: string | null;
+  nome: string;
+  telefone: string;
   email: string;
 };
 
@@ -99,21 +136,28 @@ function Survey() {
     score: null,
     atendimento: null,
     servicos: null,
+    nome: "",
+    telefone: "",
     email: "",
   });
   const [done, setDone] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailTocado, setEmailTocado] = useState(false);
+  const [nomeTocado, setNomeTocado] = useState(false);
+  const [telefoneTocado, setTelefoneTocado] = useState(false);
 
   const total = 4;
   const currentAnswered = [
     answers.score !== null,
     answers.atendimento !== null,
     answers.servicos !== null,
-    emailValido(answers.email),
+    nomeValido(answers.nome) && telefoneValido(answers.telefone) && emailValido(answers.email),
   ][step];
   const mostrarErroEmail = emailTocado && answers.email.length > 0 && !emailValido(answers.email);
+  const mostrarErroNome = nomeTocado && answers.nome.length > 0 && !nomeValido(answers.nome);
+  const mostrarErroTelefone =
+    telefoneTocado && answers.telefone.length > 0 && !telefoneValido(answers.telefone);
 
   async function submit(final: Answers) {
     setSending(true);
@@ -125,6 +169,8 @@ function Survey() {
     try {
       const resultado = await enviarRespostaParaCrm({
         data: {
+          nome: final.nome.trim().replace(/\s+/g, " "),
+          telefone: apenasDigitos(final.telefone),
           email,
           score: final.score as number,
           atendimento: final.atendimento as string,
@@ -159,7 +205,10 @@ function Survey() {
   if (done) {
     return (
       <main className="relative isolate flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden bg-[image:var(--gradient-page)] px-5 py-12">
-        <div aria-hidden className="pointer-events-none absolute inset-0 bg-[image:var(--glow-warm)]" />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[image:var(--glow-warm)]"
+        />
         <div className="relative w-full max-w-md rounded-3xl bg-card p-8 text-center shadow-[var(--shadow-card)]">
           <Logo className="max-w-[180px] px-5 py-4" imgClassName="w-16" />
           <h1 className="mt-6 text-2xl font-semibold text-foreground">
@@ -182,7 +231,10 @@ function Survey() {
 
   return (
     <main className="relative isolate min-h-[100dvh] overflow-hidden bg-[image:var(--gradient-page)] px-5 py-8">
-      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[image:var(--glow-warm)]" />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[image:var(--glow-warm)]"
+      />
       <div className="relative mx-auto w-full max-w-md">
         <header className="text-center">
           <Logo />
@@ -267,7 +319,8 @@ function Survey() {
           {step === 2 && (
             <div className="mt-6">
               <h2 className="text-lg leading-snug font-semibold text-foreground">
-                Além do seu seguro atual, você conhece outras soluções e proteções que a Santolin oferece?
+                Além do seu seguro atual, você conhece outras soluções e proteções que a Santolin
+                oferece?
               </h2>
               <div className="mt-5 space-y-3">
                 {OPCOES_SERVICOS.map((o) => (
@@ -285,38 +338,103 @@ function Survey() {
           {step === 3 && (
             <div className="mt-6">
               <h2 className="text-lg leading-snug font-semibold text-foreground">
-                Para concluir sua avaliação, informe seu e-mail abaixo e clique em ‘Enviar
+                Para concluir sua avaliação, informe seus dados abaixo e clique em ‘Enviar
                 respostas’.😊
               </h2>
-              <label htmlFor="email" className="sr-only">
-                E-mail
-              </label>
-              <input
-                id="email"
-                type="email"
-                name="email"
-                autoComplete="email"
-                inputMode="email"
-                maxLength={255}
-                required
-                value={answers.email}
-                onChange={(event) => setAnswers({ ...answers, email: event.target.value })}
-                onBlur={() => setEmailTocado(true)}
-                placeholder="Digite seu melhor e-mail"
-                aria-invalid={mostrarErroEmail}
-                aria-describedby={mostrarErroEmail ? "email-erro" : undefined}
-                className={cn(
-                  "mt-5 w-full rounded-2xl border bg-background px-5 py-4 text-[15px] text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:ring-2",
-                  mostrarErroEmail
-                    ? "border-destructive focus:border-destructive focus:ring-destructive/20"
-                    : "border-border focus:border-primary focus:ring-primary/20",
-                )}
-              />
-              {mostrarErroEmail && (
-                <p id="email-erro" className="mt-2 text-sm text-destructive">
-                  Digite um e-mail válido, como nome@empresa.com.br
-                </p>
-              )}
+
+              <div className="mt-5 space-y-4">
+                <div>
+                  <label
+                    htmlFor="nome"
+                    className="mb-1.5 block text-sm font-medium text-foreground"
+                  >
+                    Nome completo
+                  </label>
+                  <input
+                    id="nome"
+                    type="text"
+                    name="name"
+                    autoComplete="name"
+                    autoCapitalize="words"
+                    maxLength={120}
+                    required
+                    value={answers.nome}
+                    onChange={(event) => setAnswers({ ...answers, nome: event.target.value })}
+                    onBlur={() => setNomeTocado(true)}
+                    placeholder="Digite seu nome completo"
+                    aria-invalid={mostrarErroNome}
+                    aria-describedby={mostrarErroNome ? "nome-erro" : undefined}
+                    className={inputClasses(mostrarErroNome)}
+                  />
+                  {mostrarErroNome && (
+                    <p id="nome-erro" className="mt-2 text-sm text-destructive">
+                      Informe seu nome e sobrenome
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="telefone"
+                    className="mb-1.5 block text-sm font-medium text-foreground"
+                  >
+                    Telefone com DDD
+                  </label>
+                  <input
+                    id="telefone"
+                    type="tel"
+                    name="tel"
+                    autoComplete="tel-national"
+                    inputMode="tel"
+                    maxLength={15}
+                    required
+                    value={answers.telefone}
+                    onChange={(event) =>
+                      setAnswers({ ...answers, telefone: formatarTelefone(event.target.value) })
+                    }
+                    onBlur={() => setTelefoneTocado(true)}
+                    placeholder="(00) 00000-0000"
+                    aria-invalid={mostrarErroTelefone}
+                    aria-describedby={mostrarErroTelefone ? "telefone-erro" : undefined}
+                    className={inputClasses(mostrarErroTelefone)}
+                  />
+                  {mostrarErroTelefone && (
+                    <p id="telefone-erro" className="mt-2 text-sm text-destructive">
+                      Digite um telefone válido com DDD, como (11) 91234-5678
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="email"
+                    className="mb-1.5 block text-sm font-medium text-foreground"
+                  >
+                    E-mail
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    name="email"
+                    autoComplete="email"
+                    inputMode="email"
+                    maxLength={255}
+                    required
+                    value={answers.email}
+                    onChange={(event) => setAnswers({ ...answers, email: event.target.value })}
+                    onBlur={() => setEmailTocado(true)}
+                    placeholder="Digite seu melhor e-mail"
+                    aria-invalid={mostrarErroEmail}
+                    aria-describedby={mostrarErroEmail ? "email-erro" : undefined}
+                    className={inputClasses(mostrarErroEmail)}
+                  />
+                  {mostrarErroEmail && (
+                    <p id="email-erro" className="mt-2 text-sm text-destructive">
+                      Digite um e-mail válido, como nome@empresa.com.br
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 

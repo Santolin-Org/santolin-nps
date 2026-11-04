@@ -4,6 +4,9 @@ import { createServerFn } from "@tanstack/react-start";
 // consegue criar contatos no CRM) e não pode ir para o bundle do navegador.
 // Por isso a variável NÃO leva o prefixo VITE_.
 export type RespostaCrm = {
+  nome: string;
+  /** Somente dígitos, com DDD (10 ou 11 dígitos). */
+  telefone: string;
   email: string;
   score: number;
   atendimento: string;
@@ -27,6 +30,8 @@ export const enviarRespostaParaCrm = createServerFn({ method: "POST" })
     }
 
     const payload = {
+      nome_completo: data.nome,
+      telefone: `+55${data.telefone}`,
       email: data.email,
       nps_score: data.score,
       nps_classificacao: classificar(data.score),
